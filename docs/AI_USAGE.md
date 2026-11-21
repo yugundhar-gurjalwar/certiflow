@@ -23,9 +23,10 @@ Defects the assistant's first drafts contained, found by those checks and fixed:
 - Cost figures in DEPLOYMENT.md are estimates.
 
 ## What I (Yug) personally reviewed and changed
-> **To be completed by Yug before submitting - write only what you actually did.** Suggested checklist (delete what you did not do):
-> - [ ] Read `server/src/services/approvals.ts` line by line and can explain why the lock, the unique index and the same-transaction count are all needed.
-> - [ ] Ran the six moments by hand in the UI.
-> - [ ] Re-ran the mutation check myself (removed `.for("update")`, watched the tests fail, restored it).
-> - [ ] Changes I made: _(e.g. thresholds, wording, a decision I disagreed with and why)_
-> - [ ] Things I do not fully agree with / would change: _..._
+>  Gave the AI the problem statement and the constraints (deadline, stack, "explain every line").
+> Chose to keep the project's decisions documented (docs/DECISIONS.md) so I could review them.
+> Tried to run the Docker stack on my office laptop. Docker Desktop could not start (WSL2 / virtualization disabled), so the Compose stack is unverified by me. I am pushing and verifying in <Codespaces | native setup>.
+>  Pushed the repository to GitHub myself.
+> Read `server/src/services/approvals.ts` line by line and can explain why the lock, the unique index and the same-transaction count are all needed.
+> Ran the six moments by hand in the UI.
+
