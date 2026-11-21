@@ -1,0 +1,94 @@
+# Whole system with ONE command:   docker compose up --build
+# UI: http://localhost:8080   (pick a persona on the login page)
+# WhatsApp stand-in / candidate phone view + failure controls: http://localhost:4010
+name: certiflow
+
+x-server-env: &server-env
+  NODE_ENV: production
+  DATABASE_URL: postgres://certiflow:certiflow@postgres:5432/certiflow
+  REDIS_URL: redis://redis:6379
+  JWT_SECRET: ${JWT_SECRET:-change-me-in-production-please-32chars}
+  CERT_NUMBER_SECRET: ${CERT_NUMBER_SECRET:-change-me-too-in-production-32chars}
+  WEBHOOK_SECRET: ${WEBHOOK_SECRET:-change-me-webhook-secret}
+  PUBLIC_WEB_URL: ${PUBLIC_WEB_URL:-http://localhost:8080}
+  CORS_ORIGIN: ${PUBLIC_WEB_URL:-http://localhost:8080}
+  WHATSAPP_URL: http://whatsapp:4010
+  DEMO_MODE: ${DEMO_MODE:-true}
+  DEMO_PASSWORD: ${DEMO_PASSWORD:-demo1234}
+  STORAGE_DIR: /data/certificates
+  # Escalation thresholds. Production defaults are 24h / 48h; shorten them for a live demo (see docs/DEMO_SCRIPT.md).
+  ESCALATION_LEVEL1_MINUTES: ${ESCALATION_LEVEL1_MINUTES:-1440}
+  ESCALATION_LEVEL2_MINUTES: ${ESCALATION_LEVEL2_MINUTES:-2880}
+  SWEEP_INTERVAL_MS: ${SWEEP_INTERVAL_MS:-15000}
+  DELIVERY_BACKOFF_BASE_MS: ${DELIVERY_BACKOFF_BASE_MS:-3000}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment: { POSTGRES_USER: certiflow, POSTGRES_PASSWORD: certiflow, POSTGRES_DB: certiflow }
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U certiflow -d certiflow"], interval: 3s, timeout: 3s, retries: 20 }
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]   # queued jobs survive a Redis restart; the sweeper covers the rest
+    volumes: [redisdata:/data]
+    healthcheck: { test: ["CMD", "redis-cli", "ping"], interval: 3s, timeout: 3s, retries: 20 }
+
+  whatsapp:
+    build: { context: ., dockerfile: whatsapp-sim/Dockerfile }
+    environment:
+      PORT: "4010"
+      WEBHOOK_URL: http://api:4000/webhooks/whatsapp
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET:-change-me-webhook-secret}
+    ports: ["4010:4010"]
+
+  # One-shot: applies migrations and loads demo data (idempotent: skips if data exists)
+  seed:
+    build: { context: ., dockerfile: server/Dockerfile, target: runtime }
+    command: ["node", "dist/seed.js"]
+    environment: *server-env
+    depends_on: { postgres: { condition: service_healthy }, redis: { condition: service_healthy } }
+    restart: "no"
+
+  api:
+    build: { context: ., dockerfile: server/Dockerfile, target: runtime }
+    command: ["node", "dist/api.js"]
+    environment: { <<: *server-env, SERVICE_NAME: api, PORT: "4000" }
+    ports: ["4000:4000"]
+    volumes: [certs:/data/certificates]
+    depends_on:
+      seed: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+    healthcheck: { test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4000/ready"], interval: 5s, timeout: 3s, retries: 20 }
+
+  worker:
+    build: { context: ., dockerfile: server/Dockerfile, target: runtime }
+    command: ["node", "dist/worker.js"]
+    environment: { <<: *server-env, SERVICE_NAME: worker }
+    volumes: [certs:/data/certificates]
+    depends_on:
+      seed: { condition: service_completed_successfully }
+      whatsapp: { condition: service_started }
+    healthcheck: { test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4001/health"], interval: 10s, timeout: 3s, retries: 5 }
+
+  web:
+    build: { context: ., dockerfile: web/Dockerfile }
+    ports: ["8080:80"]
+    depends_on: { api: { condition: service_healthy } }
+
+  # Automated tests, run inside the same containers:   docker compose --profile test run --rm test
+  test:
+    profiles: ["test"]
+    build: { context: ., dockerfile: server/Dockerfile, target: test }
+    environment:
+      TEST_DATABASE_URL: postgres://certiflow:certiflow@postgres:5432/certiflow_test
+      TEST_REDIS_URL: redis://redis:6379/1
+    depends_on: { postgres: { condition: service_healthy }, redis: { condition: service_healthy } }
+
+volumes:
+  pgdata:
+  redisdata:
+  certs:
