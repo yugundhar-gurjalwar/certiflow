@@ -1,0 +1,13 @@
+{
+  "name": "certiflow-whatsapp-sim",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Stand-in for a WhatsApp Business provider: accepts messages, dedupes by Idempotency-Key, and can fail, time out, rate-limit or go down on demand.",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/main.js"
+  },
+  "devDependencies": { "@types/node": "^22.0.0", "tsx": "^4.19.0", "typescript": "^5.6.0" }
+}
