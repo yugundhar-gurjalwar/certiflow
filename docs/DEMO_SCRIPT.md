@@ -24,7 +24,7 @@ Open three browser windows: **(A)** <http://localhost:8080> (two profiles/incogn
    docker compose exec postgres psql -U certiflow certiflow -c "update batches set stage_entered_at = now() - interval '3 days' where name like 'Data Entry - Oct%'"
    ```
    Within 15 s Farah's bell shows an escalation, the Operations page lists it under "Stuck batches", and Meera/Kabir (who have not voted) get a reminder. Dev (who voted) does not.
-6. **Send back and resend:** Kabir -> open "Welding Fundamentals - Sep Batch" is already sent back (Dev's approval is in history). As Anika upload `samples/good_batch_25.csv`, resend; as Dev note the batch is in **round 2** and the old approval is struck through.
+6. **Send back and resend (D-6):** the seeded "Welding Fundamentals - Sep Batch" is already sent back (Dev had approved it; Kabir sent it back). Log in as **Anika**, open it, upload `samples/good_batch_25.csv` (it replaces the list) and **Resend**. Log in as **Dev**: the batch is now in **round 2** and his earlier approval is shown struck through as void; it needs two fresh approvals.
 7. **Break things on purpose:** `docker compose stop worker` -> approve a batch -> certificates stay pending but the UI is instant -> `docker compose start worker` -> everything completes. Or `docker compose exec redis redis-cli flushall` mid-run.
 
 ## Questions to expect and where the answer is
